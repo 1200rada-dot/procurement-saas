@@ -1,191 +1,279 @@
-:root {
-  font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  color: #0f172a;
-  background: #f8fafc;
-  line-height: 1.5;
-  font-weight: 400;
-}
+import { useEffect, useState } from 'react';
 
-* {
-  box-sizing: border-box;
-}
+const demoCredentials = {
+  email: 'admin@procurement.local',
+  password: '123456',
+};
 
-body {
-  margin: 0;
-  min-height: 100vh;
-  background: linear-gradient(180deg, #f8fafc 0%, #e2e8f0 100%);
-}
+function App() {
+  const [user, setUser] = useState(null);
+  const [token, setToken] = useState(localStorage.getItem('procurementToken') || '');
+  const [loginData, setLoginData] = useState(demoCredentials);
+  const [loading, setLoading] = useState(false);
+  const [dashboard, setDashboard] = useState(null);
+  const [error, setError] = useState('');
 
-button, input {
-  font: inherit;
-}
+  const fetchJson = async (url) => {
+    const res = await fetch(url, {
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+    });
 
-.app-shell {
-  max-width: 1280px;
-  margin: 0 auto;
-  padding: 32px 20px 48px;
-}
+    if (!res.ok) {
+      throw new Error('Request failed');
+    }
 
-.topbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 24px;
-}
+    return res.json();
+  };
 
-.brand {
-  font-size: 1.5rem;
-  font-weight: 800;
-  color: #0f172a;
-}
+  useEffect(() => {
+    if (!token) return;
 
-.role-badge {
-  padding: 8px 12px;
-  border-radius: 999px;
-  background: #dbeafe;
-  color: #1d4ed8;
-  font-weight: 700;
-  text-transform: uppercase;
-  font-size: 0.74rem;
-}
+    const loadDashboard = async () => {
+      try {
+        const data = await fetchJson('/api/dashboard');
+        setDashboard(data);
+        setUser({ role: data.user.role, fullName: data.user.fullName });
+      } catch (err) {
+        setError('Session expired or backend is unavailable');
+        setToken('');
+        localStorage.removeItem('procurementToken');
+      }
+    };
 
-.login-card,
-.panel {
-  background: rgba(255, 255, 255, 0.9);
-  border: 1px solid #dbe0ea;
-  border-radius: 18px;
-  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
-}
+    loadDashboard();
+  }, [token]);
 
-.login-card {
-  max-width: 440px;
-  margin: 80px auto 0;
-  padding: 28px;
-}
+  const handleLogin = async (event) => {
+    event.preventDefault();
+    setLoading(true);
+    setError('');
 
-form {
-  display: grid;
-  gap: 14px;
-}
+    try {
+      const response = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(loginData),
+      });
 
-label {
-  display: grid;
-  gap: 8px;
-  font-weight: 600;
-  color: #334155;
-}
+      const payload = await response.json();
 
-input {
-  border: 1px solid #cbd5e1;
-  border-radius: 10px;
-  background: #fff;
-  padding: 10px 12px;
-}
+      if (!response.ok) {
+        throw new Error(payload.message || 'Login failed');
+      }
 
-.primary-button,
-.secondary-button {
-  border: none;
-  border-radius: 10px;
-  padding: 12px 16px;
-  font-weight: 700;
-  cursor: pointer;
-}
+      localStorage.setItem('procurementToken', payload.token);
+      setToken(payload.token);
+      setUser(payload.user);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-.primary-button {
-  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
-  color: #fff;
-}
+  const handleLogout = () => {
+    localStorage.removeItem('procurementToken');
+    setToken('');
+    setDashboard(null);
+    setUser(null);
+  };
 
-.secondary-button {
-  background: #e2e8f0;
-  color: #0f172a;
-}
-
-.metrics-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 18px;
-  margin: 24px 0;
-}
-
-.metric-card {
-  padding: 18px;
-  border-radius: 18px;
-  background: #fff;
-  border: 1px solid #dfe7f5;
-}
-
-.metric-label {
-  color: #64748b;
-  font-size: 0.8rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-
-.metric-value {
-  margin-top: 12px;
-  font-size: 2rem;
-  font-weight: 800;
-  color: #0f172a;
-}
-
-.grid-two {
-  display: grid;
-  grid-template-columns: 1.5fr 1fr;
-  gap: 18px;
-  margin-top: 18px;
-}
-
-.panel {
-  padding: 20px;
-}
-
-.table-wrap {
-  overflow-x: auto;
-  margin-top: 12px;
-}
-
-table {
-  width: 100%;
-  border-collapse: collapse;
-}
-
-th, td {
-  text-align: left;
-  padding: 12px 10px;
-  border-bottom: 1px solid #e2e8f0;
-}
-
-th {
-  color: #475569;
-  font-size: 0.8rem;
-  text-transform: uppercase;
-}
-
-.status-pill {
-  display: inline-block;
-  padding: 6px 10px;
-  border-radius: 999px;
-  background: #dcfce7;
-  color: #166534;
-  font-size: 0.75rem;
-  font-weight: 700;
-}
-
-.empty-state {
-  color: #64748b;
-  padding: 12px 0;
-}
-
-@media (max-width: 768px) {
-  .grid-two {
-    grid-template-columns: 1fr;
+  if (!token) {
+    return (
+      <div className="app-shell">
+        <div className="login-card">
+          <h2>Procurement SaaS</h2>
+          <p>Login to access the purchasing dashboard.</p>
+          <form onSubmit={handleLogin}>
+            <label>
+              Email
+              <input
+                type="email"
+                value={loginData.email}
+                onChange={(e) => setLoginData((state) => ({ ...state, email: e.target.value }))}
+              />
+            </label>
+            <label>
+              Password
+              <input
+                type="password"
+                value={loginData.password}
+                onChange={(e) => setLoginData((state) => ({ ...state, password: e.target.value }))}
+              />
+            </label>
+            {error && <div style={{ color: '#b91c1c', fontWeight: 600 }}>{error}</div>}
+            <button className="primary-button" type="submit" disabled={loading}>
+              {loading ? 'Signing in...' : 'Login'}
+            </button>
+          </form>
+        </div>
+      </div>
+    );
   }
 
-  .topbar {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 12px;
-  }
+  const metrics = dashboard?.metrics || {};
+  const vendors = dashboard?.vendors || [];
+  const inventory = dashboard?.inventory || [];
+  const purchases = dashboard?.purchases || [];
+
+  return (
+    <div className="app-shell">
+      <div className="topbar">
+        <div>
+          <div className="brand">Procurement SaaS</div>
+          <div style={{ color: '#475569' }}>Operations dashboard</div>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <span className="role-badge">{user?.role || 'user'}</span>
+          <button className="secondary-button" onClick={handleLogout}>Logout</button>
+        </div>
+      </div>
+
+      <div className="metrics-grid">
+        <div className="metric-card">
+          <div className="metric-label">Inventory value</div>
+          <div className="metric-value">EGP {metrics.totalStockValue?.toLocaleString() || 0}</div>
+        </div>
+        <div className="metric-card">
+          <div className="metric-label">This month purchases</div>
+          <div className="metric-value">EGP {metrics.totalPurchases?.toLocaleString() || 0}</div>
+        </div>
+        <div className="metric-card">
+          <div className="metric-label">Supplier outstanding</div>
+          <div className="metric-value">EGP {metrics.openInvoices?.toLocaleString() || 0}</div>
+        </div>
+        <div className="metric-card">
+          <div className="metric-label">Inventory turnover</div>
+          <div className="metric-value">{metrics.inventoryTurnover || 0}</div>
+        </div>
+      </div>
+
+      <div className="grid-two">
+        <div className="panel">
+          <h3>Top suppliers</h3>
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Supplier</th>
+                  <th>Outstanding</th>
+                  <th>Rating</th>
+                </tr>
+              </thead>
+              <tbody>
+                {vendors.length ? (
+                  vendors.map((vendor) => (
+                    <tr key={vendor.id}>
+                      <td>{vendor.name}</td>
+                      <td>EGP {vendor.outstandingBalance?.toLocaleString()}</td>
+                      <td>{vendor.rating}</td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan="3" className="empty-state">No supplier data available</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div className="panel">
+          <h3>Purchase KPI</h3>
+          <div className="table-wrap">
+            <table>
+              <tbody>
+                <tr>
+                  <td>Top supplier</td>
+                  <td>{metrics.topSupplier || 'N/A'}</td>
+                </tr>
+                <tr>
+                  <td>Supplier turnover</td>
+                  <td>{metrics.supplierTurnover || 0}</td>
+                </tr>
+                <tr>
+                  <td>Overdue balance</td>
+                  <td>EGP {metrics.overdueBalance?.toLocaleString() || 0}</td>
+                </tr>
+                <tr>
+                  <td>Warehouses</td>
+                  <td>{metrics.warehouseCount || 0}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid-two" style={{ marginTop: 18 }}>
+        <div className="panel">
+          <h3>Inventory by warehouse</h3>
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Warehouse</th>
+                  <th>Product</th>
+                  <th>Qty</th>
+                  <th>Value</th>
+                </tr>
+              </thead>
+              <tbody>
+                {inventory.length ? (
+                  inventory.map((item) => (
+                    <tr key={item.id}>
+                      <td>{item.warehouseName}</td>
+                      <td>{item.productName}</td>
+                      <td>{item.quantity}</td>
+                      <td>EGP {item.totalValue?.toLocaleString()}</td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan="4" className="empty-state">No inventory records</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div className="panel">
+          <h3>Recent purchase orders</h3>
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>PO</th>
+                  <th>Vendor</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {purchases.length ? (
+                  purchases.map((purchase) => (
+                    <tr key={purchase.id}>
+                      <td>{purchase.code}</td>
+                      <td>{purchase.vendor}</td>
+                      <td><span className="status-pill">{purchase.status}</span></td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan="3" className="empty-state">No purchase orders</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 }
+
+export default App;
