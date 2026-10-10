@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 const demoCredentials = {
   email: 'admin@procurement.local',
@@ -11,13 +11,14 @@ function App() {
   const [loginData, setLoginData] = useState(demoCredentials);
   const [loading, setLoading] = useState(false);
   const [dashboard, setDashboard] = useState(null);
+  const [reportData, setReportData] = useState({});
   const [error, setError] = useState('');
 
-  const fetchJson = async (url) => {
+  const fetchJson = async (url, authToken = token) => {
     const res = await fetch(url, {
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
+        Authorization: `Bearer ${authToken}`,
       },
     });
 
@@ -33,8 +34,13 @@ function App() {
 
     const loadDashboard = async () => {
       try {
-        const data = await fetchJson('/api/dashboard');
+        const [data, reports] = await Promise.all([
+          fetchJson('/api/dashboard'),
+          fetchJson('/api/reports/kpis'),
+        ]);
+
         setDashboard(data);
+        setReportData(reports);
         setUser({ role: data.user.role, fullName: data.user.fullName });
       } catch (err) {
         setError('Session expired or backend is unavailable');
@@ -78,8 +84,19 @@ function App() {
     localStorage.removeItem('procurementToken');
     setToken('');
     setDashboard(null);
+    setReportData({});
     setUser(null);
   };
+
+  const metrics = dashboard?.metrics || {};
+  const vendors = dashboard?.vendors || [];
+  const inventory = dashboard?.inventory || [];
+  const purchases = dashboard?.purchases || [];
+
+  const supplierAging = reportData?.supplierAging || [];
+  const inventoryTurnover = reportData?.inventoryTurnover || [];
+  const productPricing = reportData?.productPricing || [];
+  const supplierComparison = reportData?.supplierComparison || [];
 
   if (!token) {
     return (
@@ -113,11 +130,6 @@ function App() {
       </div>
     );
   }
-
-  const metrics = dashboard?.metrics || {};
-  const vendors = dashboard?.vendors || [];
-  const inventory = dashboard?.inventory || [];
-  const purchases = dashboard?.purchases || [];
 
   return (
     <div className="app-shell">
@@ -157,26 +169,12 @@ function App() {
           <div className="table-wrap">
             <table>
               <thead>
-                <tr>
-                  <th>Supplier</th>
-                  <th>Outstanding</th>
-                  <th>Rating</th>
-                </tr>
+                <tr><th>Supplier</th><th>Outstanding</th><th>Rating</th></tr>
               </thead>
               <tbody>
-                {vendors.length ? (
-                  vendors.map((vendor) => (
-                    <tr key={vendor.id}>
-                      <td>{vendor.name}</td>
-                      <td>EGP {vendor.outstandingBalance?.toLocaleString()}</td>
-                      <td>{vendor.rating}</td>
-                    </tr>
-                  ))
-                ) : (
-                  <tr>
-                    <td colSpan="3" className="empty-state">No supplier data available</td>
-                  </tr>
-                )}
+                {vendors.length ? vendors.map((vendor) => (
+                  <tr key={vendor.id}><td>{vendor.name}</td><td>EGP {vendor.outstandingBalance?.toLocaleString()}</td><td>{vendor.rating}</td></tr>
+                )) : <tr><td colSpan="3" className="empty-state">No supplier data available</td></tr>}
               </tbody>
             </table>
           </div>
@@ -187,22 +185,10 @@ function App() {
           <div className="table-wrap">
             <table>
               <tbody>
-                <tr>
-                  <td>Top supplier</td>
-                  <td>{metrics.topSupplier || 'N/A'}</td>
-                </tr>
-                <tr>
-                  <td>Supplier turnover</td>
-                  <td>{metrics.supplierTurnover || 0}</td>
-                </tr>
-                <tr>
-                  <td>Overdue balance</td>
-                  <td>EGP {metrics.overdueBalance?.toLocaleString() || 0}</td>
-                </tr>
-                <tr>
-                  <td>Warehouses</td>
-                  <td>{metrics.warehouseCount || 0}</td>
-                </tr>
+                <tr><td>Top supplier</td><td>{metrics.topSupplier || 'N/A'}</td></tr>
+                <tr><td>Supplier turnover</td><td>{metrics.supplierTurnover || 0}</td></tr>
+                <tr><td>Overdue balance</td><td>EGP {metrics.overdueBalance?.toLocaleString() || 0}</td></tr>
+                <tr><td>Warehouses</td><td>{metrics.warehouseCount || 0}</td></tr>
               </tbody>
             </table>
           </div>
@@ -211,62 +197,66 @@ function App() {
 
       <div className="grid-two" style={{ marginTop: 18 }}>
         <div className="panel">
-          <h3>Inventory by warehouse</h3>
+          <h3>Inventory turnover</h3>
           <div className="table-wrap">
             <table>
               <thead>
-                <tr>
-                  <th>Warehouse</th>
-                  <th>Product</th>
-                  <th>Qty</th>
-                  <th>Value</th>
-                </tr>
+                <tr><th>Product</th><th>Turnover</th><th>Value</th></tr>
               </thead>
               <tbody>
-                {inventory.length ? (
-                  inventory.map((item) => (
-                    <tr key={item.id}>
-                      <td>{item.warehouseName}</td>
-                      <td>{item.productName}</td>
-                      <td>{item.quantity}</td>
-                      <td>EGP {item.totalValue?.toLocaleString()}</td>
-                    </tr>
-                  ))
-                ) : (
-                  <tr>
-                    <td colSpan="4" className="empty-state">No inventory records</td>
-                  </tr>
-                )}
+                {inventoryTurnover.length ? inventoryTurnover.map((item) => (
+                  <tr key={item.productName}><td>{item.productName}</td><td>{item.turnover}</td><td>EGP {item.totalValue?.toLocaleString()}</td></tr>
+                )) : <tr><td colSpan="3" className="empty-state">No turnover data</td></tr>}
               </tbody>
             </table>
           </div>
         </div>
 
         <div className="panel">
-          <h3>Recent purchase orders</h3>
+          <h3>Supplier aging</h3>
           <div className="table-wrap">
             <table>
               <thead>
-                <tr>
-                  <th>PO</th>
-                  <th>Vendor</th>
-                  <th>Status</th>
-                </tr>
+                <tr><th>Supplier</th><th>Current</th><th>Overdue</th></tr>
               </thead>
               <tbody>
-                {purchases.length ? (
-                  purchases.map((purchase) => (
-                    <tr key={purchase.id}>
-                      <td>{purchase.code}</td>
-                      <td>{purchase.vendor}</td>
-                      <td><span className="status-pill">{purchase.status}</span></td>
-                    </tr>
-                  ))
-                ) : (
-                  <tr>
-                    <td colSpan="3" className="empty-state">No purchase orders</td>
-                  </tr>
-                )}
+                {supplierAging.length ? supplierAging.map((item) => (
+                  <tr key={item.vendorName}><td>{item.vendorName}</td><td>EGP {item.current?.toLocaleString()}</td><td>EGP {item.over90?.toLocaleString()}</td></tr>
+                )) : <tr><td colSpan="3" className="empty-state">No aging data</td></tr>}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid-two" style={{ marginTop: 18 }}>
+        <div className="panel">
+          <h3>Product pricing analysis</h3>
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr><th>Product</th><th>Avg cost</th><th>Market</th><th>Best price</th></tr>
+              </thead>
+              <tbody>
+                {productPricing.length ? productPricing.map((item) => (
+                  <tr key={item.productName}><td>{item.productName}</td><td>EGP {item.averageCost}</td><td>EGP {item.marketAverage}</td><td>EGP {item.lowestVendorPrice}</td></tr>
+                )) : <tr><td colSpan="4" className="empty-state">No pricing data</td></tr>}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div className="panel">
+          <h3>Supplier comparison</h3>
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr><th>Supplier</th><th>Terms</th><th>Outstanding</th></tr>
+              </thead>
+              <tbody>
+                {supplierComparison.length ? supplierComparison.map((item) => (
+                  <tr key={item.vendorName}><td>{item.vendorName}</td><td>{item.defaultTerms}</td><td>EGP {item.outstandingBalance?.toLocaleString()}</td></tr>
+                )) : <tr><td colSpan="3" className="empty-state">No supplier comparison</td></tr>}
               </tbody>
             </table>
           </div>
